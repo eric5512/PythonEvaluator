@@ -1,8 +1,4 @@
 #Class file
-class Expr:
-    def __init__(self, string):
-        self.__string = string
-
 class Operator:
     def __init__(self, left, right):
         self._left = left
@@ -26,3 +22,6 @@ class Val:
 
     def eval(self):
         return self.__val
+
+def parse(string):
+    pass
