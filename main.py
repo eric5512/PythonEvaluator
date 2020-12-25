@@ -1,6 +1,6 @@
 #Main file
 from expr import *
 
-e1 = Sum(Prod(Val(4), Val(5)), Val(32))
+e = parse("4*(10/(x*(5+x)))*(4+x)")
 
-print(e1.eval())
+print(e.eval({"x": 1}))
