@@ -1,14 +1,19 @@
 #Class file
-from re import findall, match, search, split
+from re import findall, search, split
+from typing import Dict
 
 class MathExpr:
-    __slots__ = {'__repr', '__parsed_tree'}
+    __slots__ = {'__repr', '__parsed_tree', '__vars'}
 
-    def __init__(self, string):
-        self.__repr = string
+    def __init__(self, string: str):
+        self.__vars = set()
         self.__parsed_tree = self.__parse(string)
+        self.__repr = string
+        n = self.__max_depth()
+        for _ in range(n):
+            self.__parsed_tree = self.__parsed_tree.simplify()
 
-    def eval(self, env = {}):
+    def eval(self, env: Dict[str, float] = {}) -> float:
         for var in env:
             if not var in self.get_vars():
                 raise RuntimeError(f"The function has no variable named: {var}")
@@ -17,12 +22,18 @@ class MathExpr:
             return [self.__parsed_tree.eval(i) for i in new_env]
         return self.__parsed_tree.eval(env)
 
-    def derivate(self, var):
-        #self.__parsed_tree = self.__parsed_tree.simplify()
-        return self.__parsed_tree.derivate(var)
+    def derivate(self, var: str):
+        derivate = MathExpr("0")
+        derivate._MathExpr__parsed_tree = self.__parsed_tree.derivate(var)
+        derivate.__vars = self.__vars
+        derivate._MathExpr__repr = ""
+        n = derivate.__max_depth()
+        for _ in range(n):
+            derivate.__parsed_tree = derivate.__parsed_tree.simplify()
+        return derivate
 
     def get_vars(self):
-        return set(findall(r"[a-zA-Z]+[0-9a-zA-z]*", self.__repr))
+        return self.__vars
 
     class __Operator:
         __slots__ = {'_left', '_right'}
@@ -30,108 +41,182 @@ class MathExpr:
             self._left = left
             self._right = right
 
+        def max_depth(self):
+            return max(self._left.max_depth(), self._right.max_depth())+1
+
     class __Prod(__Operator):
-        def eval(self, env):
+        def eval(self, env: Dict[str, float]) -> float:
             return self._left.eval(env) * self._right.eval(env)
 
-        def recHash(self):
+        def recHash(self) -> int:
             return hash(self._left.recHash() * self._right.recHash())
 
-        def derivate(self, var):
-            return MathExpr._MathExpr__Sum(MathExpr._MathExpr__Prod(self._left.derivate(var), self._right), MathExpr._MathExpr__Prod(self._left, self._right.derivate(var)))
+        def derivate(self, var: str):
+            return MathExpr._MathExpr__Sum(MathExpr._MathExpr__Prod(self._left.derivate(var), self._right), 
+                MathExpr._MathExpr__Prod(self._left, self._right.derivate(var)))
+
+        def make_string(self):
+            return str(self._left) + '*' + str(self._right)
 
         def simplify(self):
-            pass
+            if MathExpr._MathExpr__Val(1) == self._right:
+                return self._left.simplify()
+            if MathExpr._MathExpr__Val(1) == self._left:
+                return self._right.simplify()
+            if MathExpr._MathExpr__Val(0) == self._right:
+                return MathExpr._MathExpr__Val(0)
+            if MathExpr._MathExpr__Val(0) == self._left:
+                return MathExpr._MathExpr__Val(0)
+            else:
+                return MathExpr._MathExpr__Prod(self._left.simplify(), self._right.simplify())
+            
 
     class __Sum(__Operator):
-        def eval(self, env):
+        def eval(self, env: Dict[str, float]) -> float:
             return self._left.eval(env) + self._right.eval(env)
 
-        def recHash(self):
+        def recHash(self) -> int:
             return hash(self._left.recHash() * self._right.recHash())
 
-        def derivate(self, var):
-            return self._left.derivate(var) + self._right.derivate(var)
+        def derivate(self, var: str):
+            return MathExpr._MathExpr__Sum(self._left.derivate(var), self._right.derivate(var))
+
+        def make_string(self):
+            return str(self._left) + '+' + str(self._right)
 
         def simplify(self):
-            if self._left == 0:
+            if MathExpr._MathExpr__Val(0) == self._left:
                 return self._right.simplify()
-            if self._right == 0:
+            if MathExpr._MathExpr__Val(0) == self._right:
                 return self._left.simplify()
+            else:
+                return MathExpr._MathExpr__Sum(self._left.simplify(), self._right.simplify())
 
     class __Pow(__Operator):
-        def eval(self, env):
+        def eval(self, env: Dict[str, float]) -> float:
             return self._left.eval(env) ** self._right.eval(env)
 
-        def recHash(self):
+        def recHash(self) -> int:
             return hash(self._left.recHash() ** self._right.recHash())
 
-        def derivate(self, var):
+        def derivate(self, var: str):
             if type(self._right) == MathExpr._MathExpr__Val:
-                return MathExpr._MathExpr__Prod(self._right, MathExpr._MathExpr__Prod(MathExpr._MathExpr__Pow(self._left, MathExpr._MathExpr__Sub(self._right, MathExpr._MathExpr__Val(1))), self._left.derivate(var)))
+                return MathExpr._MathExpr__Prod(self._right, MathExpr._MathExpr__Prod(MathExpr._MathExpr__Pow(self._left, MathExpr._MathExpr__Sub(self._right, MathExpr._MathExpr__Val(1.0))), self._left.derivate(var)))
+
+        def make_string(self):
+            return str(self._left) + '^' + str(self._right)
 
         def simplify(self):
-            pass
+            if MathExpr._MathExpr__Val(0) == self._right:
+                return MathExpr._MathExpr__Val(1)
+            if MathExpr._MathExpr__Val(0) == self._left:
+                return MathExpr._MathExpr__Val(0)
+            if MathExpr._MathExpr__Val(1) == self._right:
+                return self._left
+            if MathExpr._MathExpr__Val(1) == self._left:
+                return MathExpr._MathExpr__Val(1)
+            else:
+                return MathExpr._MathExpr__Pow(self._left.simplify(), self._right.simplify())
 
     class __Div(__Operator):
-        def eval(self, env):
+        def eval(self, env: Dict[str, float]) -> float:
             return self._left.eval(env) / self._right.eval(env)
 
-        def recHash(self):
+        def recHash(self) -> int:
             return hash(self._left.recHash() // self._right.recHash())
 
-        def derivate(self, var):
-            return MathExpr._MathExpr__Div(MathExpr._MathExpr__Prod(MathExpr._MathExpr__Sub(MathExpr._MathExpr__Prod(self._left.derivate(var), self._right), MathExpr._MathExpr__Prod(self._left, self._right.derivate(var)))), MathExpr._MathExpr__Pow(self._right, 2))
+        def derivate(self, var: str):
+            return MathExpr._MathExpr__Div(MathExpr._MathExpr__Sub(MathExpr._MathExpr__Prod(self._left.derivate(var), self._right), MathExpr._MathExpr__Prod(self._left, self._right.derivate(var))), MathExpr._MathExpr__Pow(self._right, MathExpr._MathExpr__Val(2.0)))
+
+        def make_string(self):
+            return str(self._left) + '/' + str(self._right)
 
         def simplify(self):
-            pass
+            if MathExpr._MathExpr__Val(0) == self._right:
+                return MathExpr._MathExpr__Val(float("inf"))
+            if MathExpr._MathExpr__Val(0) == self._left:
+                return MathExpr._MathExpr__Val(0)
+            if MathExpr._MathExpr__Val(1) == self._right:
+                return self._left
+            else:
+                return MathExpr._MathExpr__Div(self._left.simplify(), self._right.simplify())
 
     class __Sub(__Operator):
-        def eval(self, env):
+        def eval(self, env: Dict[str, float]) -> float:
             return self._left.eval(env) - self._right.eval(env)
 
-        def recHash(self):
+        def recHash(self) -> int:
             return hash(self._left.recHash() - self._right.recHash())
 
-        def derivate(self, var):
-            return self._left.derivate(var) + self._right.derivate(var)
+        def derivate(self, var: str):
+            return MathExpr._MathExpr__Sub(self._left.derivate(var), self._right.derivate(var))
+
+        def make_string(self):
+            return str(self._left) + '-' + str(self._right)
 
         def simplify(self):
-            pass
+            if MathExpr._MathExpr__Val(0) == self._left:
+                return MathExpr._MathExpr__Prod(MathExpr._MathExpr__Val(-1), self._right.simplify())
+            if MathExpr._MathExpr__Val(0) == self._right:
+                return self._left.simplify()
+            else:
+                return MathExpr._MathExpr__Sub(self._left.simplify(), self._right.simplify())
 
     class __Val:
         def __init__(self, val):
             self.val = val
 
-        def eval(self, env):
+        def eval(self, env: Dict[str, float]) -> float:
             return self.val
 
-        def recHash(self):
+        def recHash(self) -> int:
             return hash(self.val)
 
-        def derivate(self, var):
+        def derivate(self, var: str):
             return MathExpr._MathExpr__Val(0)
 
         def simplify(self):
             return self
 
+        def max_depth(self):
+            return 1
+
+        def make_string(self):
+            return str(self.val)
+
+        def __eq__(self, other):
+            if type(other) == type(self):
+                return other.val == self.val
+            return False
+
     class __Var:
         def __init__(self, name):
             self.name = name
         
-        def eval(self, env):
+        def eval(self, env: Dict[str, float]) -> float:
             return env[self.name]
 
-        def recHash(self):
+        def recHash(self) -> int:
             return hash(self.name)
 
-        def derivate(self, var):
+        def derivate(self, var: str):
             if var == self.name:
                 return MathExpr._MathExpr__Val(1)
             return MathExpr._MathExpr__Val(0)
 
         def simplify(self):
-            pass
+            return self
+
+        def max_depth(self):
+            return 1
+
+        def make_string(self):
+            return self.var
+
+        def __eq__(self, other):
+            if type(other) == type(self):
+                return self.name == other.name
+            return False
 
     def __add__(self, other):
         ret = MathExpr("0")
@@ -177,9 +262,6 @@ class MathExpr:
         self.__check_string(expr)
         return self.__parse_rec(expr, [])
 
-    def __simplify(self):
-        pass
-
     def __parse_rec(self, string, parenthesis):
         count_par = 0
         first_pos = string.find('(')
@@ -217,10 +299,16 @@ class MathExpr:
         elif par:
             return self.__parse_rec(parenthesis[int(par[0][1:-1])], parenthesis)
         elif findall(r"[a-zA-Z]+[0-9a-zA-z]*", string):
+            self.__vars.add(string)
             return self.__Var(string)
         elif findall(r"[0-9]+", string):
             return self.__Val(float(string))
 
+    def __max_depth(self):
+        return self.__parsed_tree.max_depth()
+
+    def __make_string(self):
+        return self.__parsed_tree.make_string()
 
     def __check_string(self, string):
         if string == '':
