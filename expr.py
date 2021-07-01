@@ -8,10 +8,10 @@ class MathExpr:
     def __init__(self, string: str):
         self.__vars = set()
         self.__parsed_tree = self.__parse(string)
-        self.__repr = string
         n = self.__max_depth()
         for _ in range(n):
             self.__parsed_tree = self.__parsed_tree.simplify()
+        self.__repr = self.__parsed_tree.make_string()
 
     def eval(self, env: Dict[str, float] = {}) -> float:
         for var in env:
@@ -26,10 +26,10 @@ class MathExpr:
         derivate = MathExpr("0")
         derivate._MathExpr__parsed_tree = self.__parsed_tree.derivate(var)
         derivate.__vars = self.__vars
-        derivate._MathExpr__repr = ""
         n = derivate.__max_depth()
         for _ in range(n):
             derivate.__parsed_tree = derivate.__parsed_tree.simplify()
+        derivate._MathExpr__repr = derivate.__parsed_tree.make_string()
         return derivate
 
     def get_vars(self):
@@ -56,16 +56,18 @@ class MathExpr:
                 MathExpr._MathExpr__Prod(self._left, self._right.derivate(var)))
 
         def make_string(self):
-            return str(self._left) + '*' + str(self._right)
+            return self._left.make_string() + '*' + self._right.make_string()
 
         def simplify(self):
-            if MathExpr._MathExpr__Val(1) == self._right:
+            if MathExpr._MathExpr__Val == type(self._right) and MathExpr._MathExpr__Val == type(self._left):
+                return MathExpr._MathExpr__Val(self._left.val * self._right.val)
+            elif MathExpr._MathExpr__Val(1) == self._right:
                 return self._left.simplify()
-            if MathExpr._MathExpr__Val(1) == self._left:
+            elif MathExpr._MathExpr__Val(1) == self._left:
                 return self._right.simplify()
-            if MathExpr._MathExpr__Val(0) == self._right:
+            elif MathExpr._MathExpr__Val(0) == self._right:
                 return MathExpr._MathExpr__Val(0)
-            if MathExpr._MathExpr__Val(0) == self._left:
+            elif MathExpr._MathExpr__Val(0) == self._left:
                 return MathExpr._MathExpr__Val(0)
             else:
                 return MathExpr._MathExpr__Prod(self._left.simplify(), self._right.simplify())
@@ -82,12 +84,14 @@ class MathExpr:
             return MathExpr._MathExpr__Sum(self._left.derivate(var), self._right.derivate(var))
 
         def make_string(self):
-            return str(self._left) + '+' + str(self._right)
+            return self._left.make_string() + '+' + self._right.make_string()
 
         def simplify(self):
-            if MathExpr._MathExpr__Val(0) == self._left:
+            if MathExpr._MathExpr__Val == type(self._right) and MathExpr._MathExpr__Val == type(self._left):
+                return MathExpr._MathExpr__Val(self._left.val + self._right.val)
+            elif MathExpr._MathExpr__Val(0) == self._left:
                 return self._right.simplify()
-            if MathExpr._MathExpr__Val(0) == self._right:
+            elif MathExpr._MathExpr__Val(0) == self._right:
                 return self._left.simplify()
             else:
                 return MathExpr._MathExpr__Sum(self._left.simplify(), self._right.simplify())
@@ -104,23 +108,29 @@ class MathExpr:
                 return MathExpr._MathExpr__Prod(self._right, MathExpr._MathExpr__Prod(MathExpr._MathExpr__Pow(self._left, MathExpr._MathExpr__Sub(self._right, MathExpr._MathExpr__Val(1.0))), self._left.derivate(var)))
 
         def make_string(self):
-            return str(self._left) + '^' + str(self._right)
+            return self._left.make_string() + '^' + self._right.make_string()
 
         def simplify(self):
-            if MathExpr._MathExpr__Val(0) == self._right:
+            if MathExpr._MathExpr__Val == type(self._right) and MathExpr._MathExpr__Val == type(self._left):
+                return MathExpr._MathExpr__Val(self._left.val ** self._right.val)
+            elif MathExpr._MathExpr__Val(0) == self._right:
                 return MathExpr._MathExpr__Val(1)
-            if MathExpr._MathExpr__Val(0) == self._left:
+            elif MathExpr._MathExpr__Val(0) == self._left:
                 return MathExpr._MathExpr__Val(0)
-            if MathExpr._MathExpr__Val(1) == self._right:
+            elif MathExpr._MathExpr__Val(1) == self._right:
                 return self._left
-            if MathExpr._MathExpr__Val(1) == self._left:
+            elif MathExpr._MathExpr__Val(1) == self._left:
                 return MathExpr._MathExpr__Val(1)
             else:
                 return MathExpr._MathExpr__Pow(self._left.simplify(), self._right.simplify())
 
     class __Div(__Operator):
         def eval(self, env: Dict[str, float]) -> float:
-            return self._left.eval(env) / self._right.eval(env)
+            aux = self._right.eval(env)
+            if aux != 0:
+                return self._left.eval(env) / aux
+            else:
+                return float("inf")
 
         def recHash(self) -> int:
             return hash(self._left.recHash() // self._right.recHash())
@@ -129,14 +139,19 @@ class MathExpr:
             return MathExpr._MathExpr__Div(MathExpr._MathExpr__Sub(MathExpr._MathExpr__Prod(self._left.derivate(var), self._right), MathExpr._MathExpr__Prod(self._left, self._right.derivate(var))), MathExpr._MathExpr__Pow(self._right, MathExpr._MathExpr__Val(2.0)))
 
         def make_string(self):
-            return str(self._left) + '/' + str(self._right)
+            return self._left.make_string() + '/' + self._right.make_string()
 
         def simplify(self):
-            if MathExpr._MathExpr__Val(0) == self._right:
+            if MathExpr._MathExpr__Val == type(self._right) and MathExpr._MathExpr__Val == type(self._left):
+                if self._right.val != 0:
+                    return MathExpr._MathExpr__Val(self._left.val / self._right.val)
+                else:
+                    return MathExpr._MathExpr__Val(float(0))
+            elif MathExpr._MathExpr__Val(0) == self._right:
                 return MathExpr._MathExpr__Val(float("inf"))
-            if MathExpr._MathExpr__Val(0) == self._left:
+            elif MathExpr._MathExpr__Val(0) == self._left:
                 return MathExpr._MathExpr__Val(0)
-            if MathExpr._MathExpr__Val(1) == self._right:
+            elif MathExpr._MathExpr__Val(1) == self._right:
                 return self._left
             else:
                 return MathExpr._MathExpr__Div(self._left.simplify(), self._right.simplify())
@@ -152,12 +167,14 @@ class MathExpr:
             return MathExpr._MathExpr__Sub(self._left.derivate(var), self._right.derivate(var))
 
         def make_string(self):
-            return str(self._left) + '-' + str(self._right)
+            return self._left.make_string() + '-' + self._right.make_string()
 
         def simplify(self):
-            if MathExpr._MathExpr__Val(0) == self._left:
+            if MathExpr._MathExpr__Val == type(self._right) and MathExpr._MathExpr__Val == type(self._left):
+                return MathExpr._MathExpr__Val(self._left.val - self._right.val)
+            elif MathExpr._MathExpr__Val(0) == self._left:
                 return MathExpr._MathExpr__Prod(MathExpr._MathExpr__Val(-1), self._right.simplify())
-            if MathExpr._MathExpr__Val(0) == self._right:
+            elif MathExpr._MathExpr__Val(0) == self._right:
                 return self._left.simplify()
             else:
                 return MathExpr._MathExpr__Sub(self._left.simplify(), self._right.simplify())
@@ -211,7 +228,7 @@ class MathExpr:
             return 1
 
         def make_string(self):
-            return self.var
+            return self.name
 
         def __eq__(self, other):
             if type(other) == type(self):
