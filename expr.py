@@ -1,6 +1,7 @@
 # Class file
 from re import findall, search, split
 from typing import Dict
+from math import log10, log, sin, cos, tan
 
 
 class MathExpr:
@@ -34,8 +35,23 @@ class MathExpr:
         exp_derivate._MathExpr__repr = exp_derivate.__parsed_tree.make_string()
         return exp_derivate
 
+    # TODO: Numerical integrals
+
     def get_vars(self):
         return self.__vars
+
+    class __UnOperator:
+        @property
+        def PRECEDENCE(self):
+            return 0
+
+        __slots__ = {'_operand'}
+
+        def __init__(self, operand):
+            self._operand = operand
+
+        def max_depth(self):
+            return self._operand.max_depth() + 1
 
     class __BinOperator:
         __slots__ = {'_left', '_right'}
@@ -46,6 +62,49 @@ class MathExpr:
 
         def max_depth(self):
             return max(self._left.max_depth(), self._right.max_depth()) + 1
+
+    # TODO: Implement sin, cos and tan, and make the parser work with __UnOperator subclasses
+
+    class __Log(__UnOperator):
+
+        def eval(self, env: Dict[str, float]) -> float:
+            return log(self._operand.eval(env))
+
+        def recHash(self) -> int:
+            return int(log(self._operand.recHash()))
+
+        def derivate(self, var: str):
+            return MathExpr._MathExpr__Prod(MathExpr._MathExpr__Div(self._operand.derivate(var), self._operand),
+                                            MathExpr._MathExpr__Ln(MathExpr._MathExpr__Val(10)))
+
+        def make_string(self):
+            return f"ln({self._operand.make_string()})"
+
+        def simplify(self):
+            if type(self._operand) == MathExpr._MathExpr__Val:
+                return MathExpr._MathExpr__Val(log10(self._operand.val))
+            else:
+                return MathExpr._MathExpr__Log(self._operand.simplify())
+
+    class __Ln(__UnOperator):
+
+        def eval(self, env: Dict[str, float]) -> float:
+            return log10(self._operand.eval(env))
+
+        def recHash(self) -> int:
+            return int(log10(self._operand.recHash()))
+
+        def derivate(self, var: str):
+            return MathExpr._MathExpr__Div(self._operand.derivate(var), self._operand)
+
+        def make_string(self):
+            return f"log({self._operand.make_string()})"
+
+        def simplify(self):
+            if type(self._operand) == MathExpr._MathExpr__Val:
+                return MathExpr._MathExpr__Val(log10(self._operand.val))
+            else:
+                return MathExpr._MathExpr__Log(self._operand.simplify())
 
     class __Pow(__BinOperator):
         @property
@@ -250,18 +309,22 @@ class MathExpr:
         def PRECEDENCE(self):
             return 1
 
-        def __init__(self, name):
+        def __init__(self, name, negative):
             self.name = name
+            self.negative = negative
 
         def eval(self, env: Dict[str, float]) -> float:
-            return env[self.name]
+            return env[self.name] if not self.negative else -env[self.name]
 
         def recHash(self) -> int:
             return hash(self.name)
 
         def derivate(self, var: str):
             if var == self.name:
-                return MathExpr._MathExpr__Val(1)
+                if not self.negative:
+                    return MathExpr._MathExpr__Val(1)
+                else:
+                    return MathExpr._MathExpr__Val(-1)
             return MathExpr._MathExpr__Val(0)
 
         def simplify(self):
@@ -275,7 +338,7 @@ class MathExpr:
 
         def __eq__(self, other):
             if type(other) == type(self):
-                return self.name == other.name
+                return self.name == other.name and self.negative == other.negative
             return False
 
     def __add__(self, other):
@@ -351,8 +414,8 @@ class MathExpr:
 
         divmul = search(r"[\*\/]", string[::-1])
         par = findall(r"#[0-9]+#", string)
-        if findall(r"\-", string):
-            new = string.split("-", 1)
+        if findall(r"(?<=[a-zA-Z0-9])-", string):
+            new = split(r"(?<=[)a-zA-Z0-9])-", string, maxsplit=1)
             return self.__Sub(self.__parse_rec(new[0], parenthesis), self.__parse_rec(new[1], parenthesis))
         elif findall(r"\+", string):
             new = string.split("+", 1)
@@ -369,8 +432,11 @@ class MathExpr:
         elif par:
             return self.__parse_rec(parenthesis[int(par[0][1:-1])], parenthesis)
         elif findall(r"[a-zA-Z]+[0-9a-zA-z]*", string):
+            if string[0] == '-':
+                self.__vars.add(string[1:])
+                return self.__Var(string[1:], True)
             self.__vars.add(string)
-            return self.__Var(string)
+            return self.__Var(string, False)
         elif findall(r"[0-9]+", string):
             return self.__Val(float(string))
 
@@ -385,12 +451,11 @@ class MathExpr:
             raise RuntimeError("Error at prasing empty string")
         elif len(findall(r"\(", string)) != len(findall(r"\)", string)):
             raise RuntimeError("Parenthesis error")
-        elif len(findall(r"[a-zA-z0-9\(\)\^\+\-\*\/]", string)) != len(string):
+        elif len(findall(r"[a-zA-Z0-9\(\)\^\+\-\*\/\.]", string)) != len(string):
             raise RuntimeError("Found illegal character in string while parsing")
         elif findall(r"\+{2,}|\-{2,}|\*{2,}|\/{2,}|\^{2,}", string):
             raise RuntimeError("Illegal operation")
-        for var in split(r"[\+\*\-\/\^]", string):
-            var = "".join(list(filter(lambda x: x != "(" and x != ")", var)))
+        for var in split(r"(?<=[a-zA-Z0-9])-|[\+\*\/\^]", "".join(list(filter(lambda x: x != "(" and x != ")", string)))):
             try:
                 float(var)
             except ValueError:

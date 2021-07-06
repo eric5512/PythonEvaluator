@@ -36,4 +36,5 @@ def test_derivate():
 
 
 def test_make_string():
-    assert f"{MathExpr(str(e.derivate('x'))).eval({'x': 5}):.2f}" == "-5.04"  # TODO: Fix "__check_string" and "__parse"
+    assert f"{MathExpr(str(e.derivate('x'))).eval({'x': 5}):.2f}" == "-5.04"
+
