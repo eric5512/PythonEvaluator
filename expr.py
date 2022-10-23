@@ -148,7 +148,6 @@ class MathExpr:
                 return MathExpr._MathExpr__Log(self._operand.simplify())
 
     class __Ln(__UnOperator):
-
         def eval(self, env: Dict[str, float]) -> float:
             return log(self._operand.eval(env))
 
@@ -185,7 +184,8 @@ class MathExpr:
                                             MathExpr._MathExpr__Sub(self._right, MathExpr._MathExpr__Val(1.0))),
                     self._left.derivate(var)))
             else:
-                raise NotImplemented  # TODO: Implement the c^x type derivate
+                # TODO: Implement the c^x type derivate
+                raise NotImplemented
 
         def make_string(self):
             return (self._left.make_string() if self.PRECEDENCE > self._left.PRECEDENCE else "(" + self._left.make_string() + ")") + \
@@ -500,6 +500,8 @@ class MathExpr:
             return self.__parse_rec(parenthesis[int(par[0])], parenthesis, unary)
         elif un:
             match unary[int(un[0])]:
+                case (ex, ''):
+                    raise RuntimeError("Empty operator")
                 case ("sin", op):
                     return self.__Sin(self.__parse_rec(op, parenthesis, unary))
                 case ("cos", op):
@@ -510,8 +512,6 @@ class MathExpr:
                     return self.__Ln(self.__parse_rec(op, parenthesis, unary))
                 case ("log", op):
                     return self.__Log(self.__parse_rec(op, parenthesis, unary))
-                case (ex, ''):
-                    raise RuntimeError("Empty operator")
                 case (ex, _):
                     raise RuntimeError(f"Invalid operator {ex}")
         elif findall(r"[a-zA-Z]+[0-9a-zA-z]*", string):
